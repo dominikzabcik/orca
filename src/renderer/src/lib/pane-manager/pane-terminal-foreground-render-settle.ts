@@ -230,7 +230,6 @@ export function writeForegroundTerminalChunk(
     }
   }
   try {
-    // Why: an in-place TUI redraw paints every erase in the chunk, so a streaming tool jumps the chat; one closed synchronized frame paints the settled screen.
     terminal.write(synchronizeInPlaceRedrawChunk(terminal, data), runParsedSteps)
     return true
   } catch {

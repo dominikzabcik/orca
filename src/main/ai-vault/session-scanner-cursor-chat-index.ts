@@ -28,11 +28,6 @@ export type CursorChatMetaIndex = {
   find(chatId: string): Promise<string | undefined>
 }
 
-/**
- * Opens the chats index for one root. Each call re-reads the root so a new
- * workspace bucket invalidates the signature. The bucket walk itself stops
- * once the requested chat id is in the map and continues later for the next id.
- */
 export async function openCursorChatMetaIndex(chatsRoot: string): Promise<CursorChatMetaIndex> {
   const workspaceNames = await readWorkspaceNames(chatsRoot)
   if (!workspaceNames) {
@@ -125,9 +120,7 @@ function findCursorChatMeta(
       entry.pendingWorkspaces.shift()
     }
   })
-  // Why: a refused bucket must not stay cached as "this chat does not exist".
-  // The caller observes `run`; this chain only drops the cache, so a rejection
-  // here would be unhandled once the lookup above already reported it.
+  // Why: the caller already observes `run`. Rethrowing here would be a second, unhandled rejection.
   entry.walk = run.then(
     () => undefined,
     () => {

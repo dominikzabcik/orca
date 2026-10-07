@@ -72,9 +72,7 @@ export async function discoverFiles(args: {
   }
 }
 
-// Why: the recency heap drops every transcript but the newest page. Resolving
-// each sibling before that drop walked the whole chats archive for files the
-// scan never returns.
+// Why: resolving every sidecar before the recency cap walks chats the scan never returns.
 async function attachKeptSidecars(
   kept: FileWithMtime[],
   args: {

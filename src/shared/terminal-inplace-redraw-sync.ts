@@ -6,8 +6,7 @@ import {
   type SynchronizedOutputLatchState
 } from './terminal-synchronized-output-scan'
 
-// Why three: cursor-agent walks the cursor up one row at a time to erase its
-// status block. One or two moves is ordinary output; a run is a full redraw.
+// Why: cursor-agent erases its status block one row at a time. Three ups is a redraw, not ordinary output.
 const MIN_IN_PLACE_REDRAW_CURSOR_UPS = 3
 const CURSOR_UP_ONE_ROW = '\x1b[1A'
 
@@ -33,14 +32,6 @@ function chunkRewritesInPlace(data: string): boolean {
   return true
 }
 
-/**
- * Paint an in-place TUI redraw once.
- *
- * cursor-agent emits a short header frame and then the full tool block inside
- * one chunk (a GitHub status poll keeps doing this for the whole wait). xterm
- * paints every erase, so the chat jumps. A frame the app already synchronized
- * is left alone.
- */
 export function synchronizeInPlaceRedrawChunk(terminal: object, data: string): string {
   const previous = latchByTerminal.get(terminal) ?? INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
   const scan = scanSynchronizedOutput(data, previous.markerTail, previous.active)
