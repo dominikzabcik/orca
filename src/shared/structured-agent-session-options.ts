@@ -76,14 +76,16 @@ export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
   result: AgentSessionOptionsResult
 ): AgentSessionOptionCatalog {
-  const models: CatalogModel[] = result.models.map((model) =>
-    discoveredModel(model, result.fastModeSupport?.supported === true)
-  )
+  const mode = seed.structuredConversationMode
+  const models: CatalogModel[] = result.models.map((model) => {
+    const discovered = discoveredModel(model, result.fastModeSupport?.supported === true)
+    return mode ? { ...discovered, options: [...discovered.options, mode] } : discovered
+  })
   if (!models.some((model) => model.id === result.current.model)) {
     models.push({
       id: result.current.model,
       label: result.current.model,
-      options: seed.unknownModelOptions ?? []
+      options: [...(seed.unknownModelOptions ?? []), ...(mode ? [mode] : [])]
     })
   }
   return { ...seed, models, defaultModelIsCliDefault: true }
@@ -183,7 +185,10 @@ export function applyStructuredAgentSessionOptions(
     {
       model: result.current.model,
       ...(result.current.effort ? { effort: result.current.effort } : {}),
-      ...(result.current.fastMode !== undefined ? { fastMode: result.current.fastMode } : {})
+      ...(result.current.fastMode !== undefined ? { fastMode: result.current.fastMode } : {}),
+      ...(result.current.conversationMode
+        ? { conversationMode: result.current.conversationMode }
+        : {})
     },
     result.current.confirmed ?? []
   )

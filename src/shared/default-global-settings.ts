@@ -135,6 +135,7 @@ export function buildDefaultSettings(args: {
     openAgentTabsInChatByDefault: false,
     experimentalNativeChat: false,
     experimentalStructuredNativeChat: false,
+    cursorSdkApiKey: '',
     nativeChatResumeWorkOnRestart: false,
     nativeChatQueueFollowUps: true,
     nativeChatInheritShellEnvironment: true,

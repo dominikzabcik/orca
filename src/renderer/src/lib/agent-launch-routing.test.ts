@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   RUNTIME_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
@@ -80,6 +81,20 @@ describe('resolveAgentLaunchRoute', () => {
       'terminal-tui'
     )
     expect(route({ settings: { ...settings, experimentalNativeChat: false } })).toBe('terminal-tui')
+  })
+
+  it('routes Cursor to structured chat when the host lists it', () => {
+    expect(route({ agent: 'cursor' })).toBe('terminal-tui')
+    expect(
+      route({
+        agent: 'cursor',
+        hostCapabilities: [
+          STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+          STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+        ],
+        hostStructuredAgents: ['cursor']
+      })
+    ).toBe('structured-native-chat')
   })
 
   it('fails closed for missing capability, unsupported providers, and explicit TUI options', () => {

@@ -37,10 +37,15 @@ import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtim
 import {
   resolveStructuredClaudeAccountHomePath,
   resolveStructuredCodexAccountHomePath,
+  resolveStructuredCursorAccountHomePath,
   type StructuredClaudeAccountHomeDeps,
   type StructuredCodexAccountHomeDeps
 } from './structured-agent-account-home'
 import { ACP_LAUNCH_SPECS, type AcpLaunchSpec } from '../acp/acp-launch-specs'
+import { listCursorSdkModels } from '../cursor/cursor-sdk-connection'
+import { CursorStructuredSessionAdapter } from '../cursor/cursor-structured-session-adapter'
+import { CURSOR_STRUCTURED_AGENT } from '../cursor/cursor-structured-agent-definition'
+import { supportsCursorStructuredLocation } from '../cursor/cursor-structured-location-support'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import { createAcpAgentConnection } from '../acp/acp-agent-connection'
 import {
@@ -284,6 +289,32 @@ export const STRUCTURED_AGENT_RUNTIME_REGISTRATIONS: readonly StructuredAgentRun
             getClaudeConfigDirectory: services.getClaudeConfigDirectory
           })
         )
+    },
+    {
+      definition: CURSOR_STRUCTURED_AGENT,
+      supportsLocation: supportsCursorStructuredLocation,
+      resolveAccountHome: async () =>
+        agentSessionAccountHome(CURSOR_STRUCTURED_AGENT, resolveStructuredCursorAccountHomePath()),
+      createAdapter: (context) => {
+        const { deps } = context
+        return new CursorStructuredSessionAdapter({
+          hostId: deps.hostId,
+          stateDirectory: deps.stateDirectory,
+          resolveWorkspacePath: deps.resolveWorkspacePath,
+          ...(deps.resolveCursorApiKey ? { resolveApiKey: deps.resolveCursorApiKey } : {}),
+          listModels: (apiKey) => listCursorSdkModels({ apiKey }),
+          resolveToolGate: () => {
+            const bypass = deps.resolveAgentFullAccess?.('cursor') ?? false
+            return { sandbox: !bypass, autoReview: !bypass }
+          },
+          ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+          onEvent: (event) => {
+            if (event.type === 'ended') {
+              context.deliverLifecycle(event)
+            }
+          }
+        })
+      }
     },
     ...ACP_LAUNCH_SPECS.map(acpRegistration)
   ]

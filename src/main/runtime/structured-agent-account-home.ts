@@ -1,4 +1,5 @@
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
+import { cursorSdkHomePath } from '../cursor/cursor-structured-location-support'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
@@ -15,6 +16,10 @@ export type StructuredClaudeAccountHomeDeps = {
   getClaudeConfigDirectory: (
     target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
   ) => string | null | undefined
+}
+
+export function resolveStructuredCursorAccountHomePath(): string {
+  return cursorSdkHomePath()
 }
 
 export function resolveStructuredClaudeAccountHomePath(

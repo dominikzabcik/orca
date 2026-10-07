@@ -7,6 +7,7 @@ import {
 } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { createCodexModelCatalogProbe } from '../codex/codex-model-catalog-probe'
 import { createClaudeModelCatalogProbe } from '../claude/claude-model-catalog-probe'
+import { createCursorModelCatalogProbe } from '../cursor/cursor-model-catalog-probe'
 import { workspaceMayOverrideDefaultModel } from '../native-chat/agent-model-catalog/agent-project-model-override'
 import type { ClaudeStructuredLaunchResolverDeps } from '../claude/claude-structured-launch-resolution'
 import type { CodexStructuredLaunchResolverDeps } from '../codex/codex-structured-launch-resolution'
@@ -55,6 +56,7 @@ export async function modelCatalogHostDeps(input: {
     | 'resolveClaudeCommand'
     | 'resolveClaudeLaunchEnv'
     | 'resolveClaudeAuthPolicy'
+    | 'resolveCursorApiKey'
   >
   envResolvers: {
     resolveCodexEnvironment: NonNullable<CodexStructuredLaunchResolverDeps['resolveEnvironment']>
@@ -84,6 +86,9 @@ export async function modelCatalogHostDeps(input: {
         resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
         ...(deps.resolveClaudeCommand ? { resolveCommand: deps.resolveClaudeCommand } : {}),
         ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {})
+      }),
+      cursor: createCursorModelCatalogProbe({
+        resolveApiKey: deps.resolveCursorApiKey
       })
     }
   })

@@ -222,6 +222,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   experimentalNativeChat?: boolean
   /** Opt-in updated structured runtime; off keeps the existing PTY-backed native chat path. */
   experimentalStructuredNativeChat?: boolean
+  /** Optional Cursor SDK key for structured chat. Empty uses the browser login on this host. */
+  cursorSdkApiKey?: string
   /** Opt-in: resume working structured chats automatically on the next launch. Off still offers
    *  the list, so the user sees exactly what would run before anything spends tokens. */
   nativeChatResumeWorkOnRestart?: boolean

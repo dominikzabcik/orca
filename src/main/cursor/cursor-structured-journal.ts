@@ -1,0 +1,191 @@
+import type {
+  AgentJournalItemBody,
+  AgentJournalItemIdentity,
+  AgentJournalToolCallItem
+} from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
+import {
+  boundInlineText,
+  boundPayload,
+  boundToolInput,
+  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+} from '../native-chat/agent-session-journal/journal-payload-bounds'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { CursorSidecarEvent } from './cursor-sdk-protocol'
+
+export type CursorTurn = {
+  sessionId: string
+  turnId: string
+  startedAt: number
+  requestedAt?: number
+}
+
+type LiveText = { assistant: string; thinking: string }
+
+export function cursorTurnIdentity(sessionId: string, turnId: string): AgentJournalItemIdentity {
+  return { provider: 'legacy', agent: 'cursor', sessionId, recordId: `turn:${turnId}` }
+}
+
+export function cursorItemIdentity(sessionId: string, recordId: string): AgentJournalItemIdentity {
+  return { provider: 'legacy', agent: 'cursor', sessionId, recordId }
+}
+
+export class CursorJournalTranslator {
+  private readonly text = new Map<string, LiveText>()
+  private loginShown = false
+
+  constructor(
+    private readonly sessionId: string,
+    private readonly events: StructuredAgentSessionEventSink | undefined
+  ) {}
+
+  openTurn(turn: CursorTurn): void {
+    const body = agentJournalTurnBody({
+      turnId: turn.turnId,
+      state: 'running',
+      startedAt: turn.startedAt,
+      ...(turn.requestedAt === undefined ? {} : { requestedAt: turn.requestedAt }),
+      userItemId: agentJournalItemKey(cursorTurnIdentity(this.sessionId, turn.turnId))
+    })
+    this.write(cursorTurnIdentity(this.sessionId, turn.turnId), body, AGENT_JOURNAL_THREAD_SCOPE, {
+      observedAt: turn.startedAt
+    })
+    this.text.set(turn.turnId, { assistant: '', thinking: '' })
+  }
+
+  apply(turn: CursorTurn, event: CursorSidecarEvent): void {
+    const live = this.text.get(turn.turnId) ?? { assistant: '', thinking: '' }
+    this.text.set(turn.turnId, live)
+    const scope = {
+      kind: 'turn' as const,
+      turnItemId: agentJournalItemKey(cursorTurnIdentity(this.sessionId, turn.turnId))
+    }
+    if (event.type === 'text') {
+      live.assistant += event.text
+      this.write(
+        cursorItemIdentity(this.sessionId, `assistant:${turn.turnId}`),
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: boundText(live.assistant) }]
+        },
+        scope
+      )
+      return
+    }
+    if (event.type === 'thinking') {
+      live.thinking += event.text
+      this.write(
+        cursorItemIdentity(this.sessionId, `thinking:${turn.turnId}`),
+        {
+          kind: 'message',
+          role: 'reasoning',
+          blocks: [{ type: 'text', text: boundText(live.thinking) }]
+        },
+        scope
+      )
+      return
+    }
+    if (event.type === 'task') {
+      this.write(
+        cursorItemIdentity(this.sessionId, `task:${turn.turnId}`),
+        { kind: 'status', text: event.text },
+        scope
+      )
+      return
+    }
+    if (event.type === 'tool') {
+      const output = event.result === undefined ? undefined : boundToolResult(event.result)
+      const body: AgentJournalToolCallItem = {
+        kind: 'tool-call',
+        name: event.name,
+        input: boundToolInput(event.args ?? null, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+        callId: event.callId,
+        state:
+          event.status === 'error'
+            ? 'failed'
+            : event.status === 'completed'
+              ? 'completed'
+              : 'running',
+        ...(output ? { output } : {})
+      }
+      this.write(cursorItemIdentity(this.sessionId, `tool:${event.callId}`), body, scope)
+      return
+    }
+    if (event.type === 'result') {
+      if (!live.assistant && event.result) {
+        this.write(
+          cursorItemIdentity(this.sessionId, `assistant:${turn.turnId}`),
+          {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: boundText(event.result) }]
+          },
+          scope
+        )
+      }
+      const failed = event.status === 'error'
+      const interrupted = event.status === 'cancelled'
+      this.write(
+        cursorTurnIdentity(this.sessionId, turn.turnId),
+        agentJournalTurnBody({
+          turnId: turn.turnId,
+          state: interrupted ? 'interrupted' : 'completed',
+          ...(failed
+            ? { outcome: 'failure' as const }
+            : interrupted
+              ? { outcome: 'cancellation' as const }
+              : { outcome: 'success' as const }),
+          startedAt: turn.startedAt,
+          ...(turn.requestedAt === undefined ? {} : { requestedAt: turn.requestedAt }),
+          completedAt: Date.now(),
+          userItemId: agentJournalItemKey(cursorTurnIdentity(this.sessionId, turn.turnId)),
+          ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs })
+        }),
+        AGENT_JOURNAL_THREAD_SCOPE
+      )
+    }
+  }
+
+  loginUrl(url: string): void {
+    this.loginShown = true
+    this.write(
+      cursorItemIdentity(this.sessionId, 'login-url'),
+      { kind: 'status', text: `Sign in to Cursor to continue: ${url}` },
+      AGENT_JOURNAL_THREAD_SCOPE
+    )
+  }
+
+  clearLogin(): void {
+    if (!this.loginShown) {
+      return
+    }
+    this.loginShown = false
+    this.events?.appendTombstone(cursorItemIdentity(this.sessionId, 'login-url'))
+    this.events?.publish()
+  }
+
+  private write(
+    identity: AgentJournalItemIdentity,
+    body: AgentJournalItemBody,
+    turnScope: { kind: 'turn'; turnItemId: string } | typeof AGENT_JOURNAL_THREAD_SCOPE,
+    extra?: { observedAt?: number }
+  ): void {
+    this.events?.appendItem(identity, body, {
+      turnScope,
+      ...(extra?.observedAt === undefined ? {} : { observedAt: extra.observedAt })
+    })
+    this.events?.publish()
+  }
+}
+
+function boundText(text: string): string {
+  return boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+}
+
+function boundToolResult(value: unknown): AgentJournalToolCallItem['output'] {
+  const raw = typeof value === 'string' ? value : JSON.stringify(value)
+  return boundPayload(raw ?? 'null', DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+}

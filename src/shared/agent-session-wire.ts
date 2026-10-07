@@ -485,5 +485,7 @@ export type AgentSessionOptionsResult = {
      * treating the value as unconfirmed, which is what it was before.
      */
     confirmed?: readonly string[]
+    /** Cursor structured chat: agent or plan. Absent on Claude and Codex. */
+    conversationMode?: 'agent' | 'plan'
   }
 }
