@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { cursorModelSelection, cursorModelsToSessionOptions } from './cursor-model-catalog'
+import {
+  cursorCatalogCredentialScope,
+  cursorModelSelection,
+  cursorModelsToSessionOptions
+} from './cursor-model-catalog'
 import type { CursorSdkListedModel } from './cursor-sdk-protocol'
 
 const listed: CursorSdkListedModel[] = [
@@ -13,5 +17,12 @@ describe('cursor model catalog', () => {
     const selected = cursorModelSelection({}, listed)
     expect(options.find((model) => model.isDefault)?.id).toBe('composer-2.5')
     expect(selected.id).toBe('composer-2.5')
+  })
+
+  it('names a key by its hash', () => {
+    expect(cursorCatalogCredentialScope('secret')).not.toContain('secret')
+    expect(cursorCatalogCredentialScope(' secret ')).toBe(cursorCatalogCredentialScope('secret'))
+    expect(cursorCatalogCredentialScope(undefined)).toBe('browser-login')
+    expect(cursorCatalogCredentialScope('other')).not.toBe(cursorCatalogCredentialScope('secret'))
   })
 })

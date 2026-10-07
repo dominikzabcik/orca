@@ -283,28 +283,60 @@ describe('Cursor structured session adapter', () => {
   })
 
   it('still returns a model when the catalog list fails', async () => {
-    const connection = scriptedConnection((command, emit) => {
-      if (command.type === 'start') {
-        emit({ type: 'ready', agentId: 'agent_1' })
-      }
-    })
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-07T00:00:00Z'))
+    try {
+      const connection = scriptedConnection((command, emit) => {
+        if (command.type === 'start') {
+          emit({ type: 'ready', agentId: 'agent_1' })
+        }
+      })
+      let lists = 0
+      const adapter = new CursorStructuredSessionAdapter({
+        hostId: 'local',
+        stateDirectory: '/tmp/orca-cursor-test',
+        resolveWorkspacePath: async () => '/tmp/workspace',
+        openConnection: () => connection,
+        readProcessStartTime: async () => 1000,
+        listModels: async () => {
+          lists += 1
+          throw new Error('not signed in')
+        }
+      })
+      await adapter.acquire({ identity: IDENTITY, fence: 1, spawnToken: 'spawn-5' })
+      await expect(adapter.readOptions({ sessionId: IDENTITY.sessionId })).resolves.toMatchObject({
+        current: { model: 'auto', conversationMode: 'agent' }
+      })
+      await adapter.readOptions({ sessionId: IDENTITY.sessionId })
+      expect(lists).toBe(1)
+      vi.setSystemTime(new Date('2026-10-07T00:00:01Z'))
+      await adapter.readOptions({ sessionId: IDENTITY.sessionId })
+      expect(lists).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a model list until the API key changes', async () => {
+    let key: string | undefined
     let lists = 0
     const adapter = new CursorStructuredSessionAdapter({
       hostId: 'local',
       stateDirectory: '/tmp/orca-cursor-test',
       resolveWorkspacePath: async () => '/tmp/workspace',
-      openConnection: () => connection,
+      resolveApiKey: () => key,
+      openConnection: () => scriptedConnection(() => {}),
       readProcessStartTime: async () => 1000,
       listModels: async () => {
         lists += 1
-        throw new Error('not signed in')
+        return [{ id: 'composer-2.5', displayName: 'Composer 2.5' }]
       }
     })
-    await adapter.acquire({ identity: IDENTITY, fence: 1, spawnToken: 'spawn-5' })
-    await expect(adapter.readOptions({ sessionId: IDENTITY.sessionId })).resolves.toMatchObject({
-      current: { model: 'auto', conversationMode: 'agent' }
-    })
+    await adapter.readOptions({ sessionId: IDENTITY.sessionId })
     await adapter.readOptions({ sessionId: IDENTITY.sessionId })
     expect(lists).toBe(1)
+    key = 'next-key'
+    await adapter.readOptions({ sessionId: IDENTITY.sessionId })
+    expect(lists).toBe(2)
   })
 })

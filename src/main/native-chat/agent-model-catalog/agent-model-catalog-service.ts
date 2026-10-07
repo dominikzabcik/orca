@@ -6,7 +6,8 @@ import type {
 import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import {
   agentModelCatalogFingerprint,
-  agentModelCatalogFingerprintForRecord
+  agentModelCatalogIdentityForRecord,
+  type AgentModelCatalogIdentity
 } from './agent-model-catalog-fingerprint'
 import type {
   AgentModelCatalogEntry,
@@ -26,6 +27,8 @@ export type AgentModelCatalogServiceDeps = {
   resolveAccountHome: (agent: string) => Promise<AgentSessionAccountHome>
   /** Session-less listers, one per agent that has one on this host. */
   probes?: Readonly<Partial<Record<string, AgentModelCatalogProbe>>>
+  /** Cursor only. A new value is a new catalog even when the account home is unchanged. */
+  cursorCredentialScope?: () => string
   /** Whether the workspace's own config could pick a model other than the listed default. */
   workspaceMayOverrideDefaultModel?: (input: {
     agent: string
@@ -43,6 +46,14 @@ export type AgentModelCatalogService = {
     /** With no entry yet, answer from the listing this read starts or joins instead of `unknown`. */
     waitForListing?: boolean
   }) => Promise<AgentSessionModelCatalogResult>
+}
+
+function catalogFingerprint(
+  deps: AgentModelCatalogServiceDeps,
+  identity: AgentModelCatalogIdentity
+): string {
+  const credentialScope = identity.agent === 'cursor' ? deps.cursorCredentialScope?.() : undefined
+  return agentModelCatalogFingerprint(credentialScope ? { ...identity, credentialScope } : identity)
 }
 
 function resultFromEntry(
@@ -101,7 +112,7 @@ export function createAgentModelCatalogService(
       let fingerprint: string
       let accountHomePath: string | null
       if (scoped) {
-        fingerprint = agentModelCatalogFingerprintForRecord(scoped)
+        fingerprint = catalogFingerprint(deps, agentModelCatalogIdentityForRecord(scoped))
         // Probes spawn natively; a WSL-pinned record has no host-side lister.
         accountHomePath =
           scoped.location.wslDistro === null && isLegacyAgentSessionAccountHome(scoped.accountHome)
@@ -114,7 +125,7 @@ export function createAgentModelCatalogService(
         } catch {
           return { origin: 'unknown' }
         }
-        fingerprint = agentModelCatalogFingerprint({
+        fingerprint = catalogFingerprint(deps, {
           agent: params.agent,
           accountHome: resolved,
           wslDistro: null

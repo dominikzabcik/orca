@@ -8,6 +8,7 @@ import {
 import { createCodexModelCatalogProbe } from '../codex/codex-model-catalog-probe'
 import { createClaudeModelCatalogProbe } from '../claude/claude-model-catalog-probe'
 import { createCursorModelCatalogProbe } from '../cursor/cursor-model-catalog-probe'
+import { cursorCatalogCredentialScope } from '../cursor/cursor-model-catalog'
 import { workspaceMayOverrideDefaultModel } from '../native-chat/agent-model-catalog/agent-project-model-override'
 import type { ClaudeStructuredLaunchResolverDeps } from '../claude/claude-structured-launch-resolution'
 import type { CodexStructuredLaunchResolverDeps } from '../codex/codex-structured-launch-resolution'
@@ -76,6 +77,7 @@ export async function modelCatalogHostDeps(input: {
     drivesRecord: (record) => agentDrivesSession(input.agents, record),
     resolveAccountHome: deps.resolveAgentAccountHome,
     workspaceMayOverrideDefaultModel,
+    cursorCredentialScope: () => cursorCatalogCredentialScope(deps.resolveCursorApiKey?.()),
     probes: {
       codex: createCodexModelCatalogProbe({
         resolveEnvironment: input.envResolvers.resolveCodexEnvironment,

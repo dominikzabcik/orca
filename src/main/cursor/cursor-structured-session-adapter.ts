@@ -8,7 +8,12 @@ import type {
 import type { AgentSessionOptionsResult } from '../../shared/agent-session-wire'
 import type { CursorSdkConnection } from './cursor-sdk-connection'
 import { openCursorSdkConnection } from './cursor-sdk-connection'
-import { cursorModelSelection, cursorModelsToSessionOptions } from './cursor-model-catalog'
+import {
+  cursorModelSelection,
+  cursorModelsToSessionOptions,
+  emptyCursorModelListCache,
+  refreshCursorModelList
+} from './cursor-model-catalog'
 import type { CursorSdkListedModel } from './cursor-sdk-protocol'
 import { supportsCursorStructuredLocation } from './cursor-structured-location-support'
 import {
@@ -57,8 +62,7 @@ export type CursorStructuredSessionAdapterDeps = {
 
 export class CursorStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, CursorLiveSession>()
-  private models: CursorSdkListedModel[] = []
-  private modelsAttempted = false
+  private readonly modelList = emptyCursorModelListCache()
 
   constructor(private readonly deps: CursorStructuredSessionAdapterDeps) {}
 
@@ -127,7 +131,7 @@ export class CursorStructuredSessionAdapter implements StructuredAgentSessionAda
       storeDir: join(this.deps.stateDirectory, 'cursor-sdk-agents'),
       ...(apiKey ? { apiKey } : {}),
       ...(resumeAgentId ? { agentId: resumeAgentId } : {}),
-      model: cursorModelSelection(options, this.models),
+      model: cursorModelSelection(options, this.modelList.models),
       mode,
       sandbox: gate.sandbox,
       autoReview: gate.autoReview
@@ -208,7 +212,7 @@ export class CursorStructuredSessionAdapter implements StructuredAgentSessionAda
       type: 'send',
       text,
       ...(await cursorMessageImages(input.body)),
-      model: cursorModelSelection(session.options, this.models),
+      model: cursorModelSelection(session.options, this.modelList.models),
       mode: session.mode
     })
     return { state: 'accepted', providerIdentity: cursorTurnIdentity(input.sessionId, turn.turnId) }
@@ -239,15 +243,8 @@ export class CursorStructuredSessionAdapter implements StructuredAgentSessionAda
   async readOptions(input: { sessionId: string }): Promise<AgentSessionOptionsResult> {
     const session = this.sessions.get(input.sessionId)
     const options = session?.options ?? {}
-    if (!this.modelsAttempted && this.deps.listModels) {
-      this.modelsAttempted = true
-      try {
-        this.models = await this.deps.listModels(this.deps.resolveApiKey?.()?.trim() || undefined)
-      } catch {
-        this.models = []
-      }
-    }
-    const models = cursorModelsToSessionOptions(this.models)
+    await refreshCursorModelList(this.modelList, this.deps)
+    const models = cursorModelsToSessionOptions(this.modelList.models)
     const model = options.model || models.find((entry) => entry.isDefault)?.id || 'auto'
     return {
       models,

@@ -1,4 +1,4 @@
-import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
+import type { DirectoryAccountAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
 
 export const CURSOR_HANDLE_TRANSPORT = 'cursor-sdk'
 
@@ -13,7 +13,7 @@ export function isCursorStructuredOptionKey(key: string): boolean {
   return CURSOR_OPTION_KEYS.has(key)
 }
 
-export const CURSOR_STRUCTURED_AGENT: StructuredAgentDefinition = {
+export const CURSOR_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   agent: 'cursor',
   handleTransport: CURSOR_HANDLE_TRANSPORT,
   accountHomeVariable: 'CURSOR_SDK_HOME',

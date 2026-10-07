@@ -3,6 +3,48 @@ import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
 import type { CursorSdkListedModel, CursorSdkModelSelection } from './cursor-sdk-protocol'
 
 const DEFAULT_MODEL_IDS = ['composer-2.5', 'auto']
+const CURSOR_MODEL_LIST_RETRY_MS = 1_000
+
+export type CursorModelListCache = {
+  models: CursorSdkListedModel[]
+  scope: string | null
+  failedScope: string | null
+  failedAt: number
+}
+
+export function emptyCursorModelListCache(): CursorModelListCache {
+  return { models: [], scope: null, failedScope: null, failedAt: 0 }
+}
+
+/** A failed list retries on a later read. A burst of reads does not spawn a sidecar each time. */
+export async function refreshCursorModelList(
+  cache: CursorModelListCache,
+  input: {
+    listModels?: (apiKey: string | undefined) => Promise<CursorSdkListedModel[]>
+    resolveApiKey?: () => string | undefined
+  }
+): Promise<void> {
+  if (!input.listModels) {
+    return
+  }
+  const scope = cursorCatalogCredentialScope(input.resolveApiKey?.())
+  if (cache.scope === scope) {
+    return
+  }
+  if (cache.failedScope === scope && Date.now() - cache.failedAt < CURSOR_MODEL_LIST_RETRY_MS) {
+    return
+  }
+  try {
+    cache.models = await input.listModels(input.resolveApiKey?.()?.trim() || undefined)
+    cache.scope = scope
+    cache.failedScope = null
+  } catch {
+    cache.models = []
+    cache.scope = null
+    cache.failedScope = scope
+    cache.failedAt = Date.now()
+  }
+}
 
 export function cursorCatalogCredentialScope(apiKey: string | undefined): string {
   const key = apiKey?.trim()
