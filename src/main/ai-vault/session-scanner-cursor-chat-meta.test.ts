@@ -18,7 +18,7 @@ vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
     wslGatedReaddir: (
       ...args: Parameters<typeof actual.wslGatedReaddir>
     ): ReturnType<typeof actual.wslGatedReaddir> => {
-      if (args[0].includes('/chats/')) {
+      if (/[\\/]chats[\\/]/.test(args[0])) {
         workspaceDirReads += 1
       }
       if (args[0].endsWith('chats')) {
