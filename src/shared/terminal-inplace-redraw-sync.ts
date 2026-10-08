@@ -10,7 +10,11 @@ import {
 const MIN_IN_PLACE_REDRAW_CURSOR_UPS = 3
 const CURSOR_UP_ONE_ROW = '\x1b[1A'
 
-const latchByTerminal = new WeakMap<object, SynchronizedOutputLatchState>()
+export type InPlaceRedrawTerminal = {
+  write(data: string, callback?: () => void): void
+}
+
+const latchByTerminal = new WeakMap<InPlaceRedrawTerminal, SynchronizedOutputLatchState>()
 
 function chunkRewritesInPlace(data: string): boolean {
   if (
@@ -32,7 +36,10 @@ function chunkRewritesInPlace(data: string): boolean {
   return true
 }
 
-export function synchronizeInPlaceRedrawChunk(terminal: object, data: string): string {
+export function synchronizeInPlaceRedrawChunk(
+  terminal: InPlaceRedrawTerminal,
+  data: string
+): string {
   const previous = latchByTerminal.get(terminal) ?? INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
   const scan = scanSynchronizedOutput(data, previous.markerTail, previous.active)
   latchByTerminal.set(terminal, { markerTail: scan.markerTail, active: scan.active })
