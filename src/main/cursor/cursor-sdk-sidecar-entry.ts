@@ -7,6 +7,13 @@ import type { AgentOptions, LocalAgentOptions } from '@cursor/sdk'
 import type * as CursorSdk from '@cursor/sdk'
 import type { CursorSidecarCommand, CursorSidecarEvent } from './cursor-sdk-protocol'
 import {
+  cursorSdkRunResultFromStored,
+  readCursorSdkRunUntilSettled,
+  waitForStoredCursorRun,
+  type CursorSdkRunResult,
+  type CursorSdkStoredRun
+} from './cursor-sdk-run-completion'
+import {
   forwardCursorSdkDelta,
   forwardCursorSdkMessage,
   INITIAL_CURSOR_RUN_FORWARD_STATE,
@@ -19,6 +26,15 @@ type LiveRun = Awaited<ReturnType<LiveAgent['send']>>
 
 let agent: LiveAgent | null = null
 let run: LiveRun | null = null
+let storedRuns: {
+  get(input: {
+    readonly agentId: string
+    readonly runId: string
+  }): Promise<CursorSdkStoredRun | null>
+  list(input: {
+    readonly filter?: { readonly agentIds?: readonly string[] }
+  }): Promise<{ readonly items: readonly CursorSdkStoredRun[] }>
+} | null = null
 let disposing = false
 let forward: CursorRunForwardState = INITIAL_CURSOR_RUN_FORWARD_STATE
 
@@ -57,6 +73,7 @@ async function startAgent(
 ): Promise<void> {
   await ensureSignedIn(sdk, command.apiKey)
   const store = new sdk.JsonlLocalAgentStore(command.storeDir)
+  storedRuns = store.runs
   const local: LocalAgentOptions = {
     cwd: command.cwd,
     store,
@@ -76,20 +93,39 @@ async function startAgent(
   emit({ type: 'ready', agentId: agent.agentId })
 }
 
+function emitResult(result: CursorSdkRunResult): void {
+  emit({
+    type: 'result',
+    status: resultStatus(result.status),
+    ...(result.result ? { result: result.result } : {}),
+    ...(result.error?.message ? { error: result.error.message } : {}),
+    ...(typeof result.durationMs === 'number' ? { durationMs: result.durationMs } : {})
+  })
+}
+
+function resultStatus(status: string): 'finished' | 'error' | 'cancelled' {
+  const normalized = status.toLowerCase()
+  if (normalized === 'error' || normalized === 'cancelled') {
+    return normalized
+  }
+  return 'finished'
+}
+
+async function readStoredRun(next: LiveRun): Promise<CursorSdkStoredRun | null> {
+  return (await storedRuns?.get({ agentId: next.agentId, runId: next.id })) ?? null
+}
+
 async function consumeRun(next: LiveRun): Promise<void> {
   run = next
   try {
-    for await (const event of next.stream()) {
-      emitForward(forwardCursorSdkMessage(forward, event))
-    }
-    const result = await next.wait()
-    emit({
-      type: 'result',
-      status: result.status,
-      ...(result.result ? { result: result.result } : {}),
-      ...(result.error?.message ? { error: result.error.message } : {}),
-      ...(typeof result.durationMs === 'number' ? { durationMs: result.durationMs } : {})
-    })
+    const result = await readCursorSdkRunUntilSettled(
+      next,
+      (event) => {
+        emitForward(forwardCursorSdkMessage(forward, event))
+      },
+      () => readStoredRun(next)
+    )
+    emitResult(result)
   } finally {
     if (run === next) {
       run = null
@@ -106,14 +142,44 @@ async function onSend(command: Extract<CursorSidecarCommand, { type: 'send' }>):
       ? { text: command.text, images: command.images }
       : command.text
   forward = INITIAL_CURSOR_RUN_FORWARD_STATE
-  const next = await agent.send(message, {
+  const current = agent
+  const sentAt = Date.now()
+  let stopWatch = false
+  const sending = current.send(message, {
     ...(command.model ? { model: command.model } : {}),
     ...(command.mode ? { mode: command.mode } : {}),
     onDelta: ({ update }) => {
       emitForward(forwardCursorSdkDelta(forward, update))
     }
   })
-  await consumeRun(next)
+  try {
+    const outcome = await Promise.race([
+      sending.then((next) => ({ kind: 'run' as const, next })),
+      waitForStoredCursorRun(
+        () => listStoredRuns(current.agentId),
+        sentAt,
+        () => stopWatch
+      ).then((row) => ({ kind: 'store' as const, row }))
+    ])
+    if (outcome.kind === 'run') {
+      await consumeRun(outcome.next)
+      return
+    }
+    if (outcome.row) {
+      emitResult(cursorSdkRunResultFromStored(outcome.row))
+      // send can still reject after the stored row already finished the turn
+      void sending.catch(() => {})
+      return
+    }
+    await consumeRun(await sending)
+  } finally {
+    stopWatch = true
+  }
+}
+
+async function listStoredRuns(agentId: string): Promise<CursorSdkStoredRun[]> {
+  const listed = await storedRuns?.list({ filter: { agentIds: [agentId] } })
+  return [...(listed?.items ?? [])]
 }
 
 function reportCommandError(error: unknown): boolean {

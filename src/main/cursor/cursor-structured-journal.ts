@@ -1,11 +1,16 @@
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
-  AgentJournalToolCallItem
+  AgentJournalToolCallItem,
+  AgentJournalTurnItem
 } from '../../shared/agent-session-journal-types'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../shared/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
+import { writeAgentJournalTurnRow } from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import {
   boundInlineText,
   boundPayload,
@@ -58,17 +63,8 @@ export class CursorJournalTranslator {
   ) {}
 
   openTurn(turn: CursorTurn): void {
-    const body = agentJournalTurnBody({
-      turnId: turn.turnId,
-      state: 'running',
-      startedAt: turn.startedAt,
-      ...(turn.requestedAt === undefined ? {} : { requestedAt: turn.requestedAt }),
-      userItemId: agentJournalItemKey(cursorTurnIdentity(this.sessionId, turn.turnId))
-    })
-    this.write(cursorTurnIdentity(this.sessionId, turn.turnId), body, AGENT_JOURNAL_THREAD_SCOPE, {
-      observedAt: turn.startedAt
-    })
     this.text.set(turn.turnId, { assistant: '', thinking: '' })
+    this.writeTurn(turn, turn.startedAt)
   }
 
   apply(turn: CursorTurn, event: CursorSidecarEvent): void {
@@ -173,23 +169,33 @@ export class CursorJournalTranslator {
     }
   }
 
-  private writeTurn(turn: CursorTurn): void {
+  private writeTurn(turn: CursorTurn, observedAt?: number): void {
+    const events = this.events
+    if (!events) {
+      return
+    }
+    const contextUsage = this.contextByTurn.get(turn.turnId)
+    writeAgentJournalTurnRow(
+      events,
+      { identity: cursorTurnIdentity(this.sessionId, turn.turnId) },
+      { lifecycle: this.turnLifecycle(turn), ...(contextUsage ? { contextUsage } : {}) },
+      { publish: true, ...(observedAt === undefined ? {} : { options: { observedAt } }) }
+    )
+  }
+
+  private turnLifecycle(turn: CursorTurn): AgentJournalTurnItem {
     const done = this.settled.get(turn.turnId)
     const contextUsage = this.contextByTurn.get(turn.turnId)
-    this.write(
-      cursorTurnIdentity(this.sessionId, turn.turnId),
-      agentJournalTurnBody({
-        turnId: turn.turnId,
-        state: done?.state ?? 'running',
-        ...(done ? { outcome: done.outcome, completedAt: done.completedAt } : {}),
-        startedAt: turn.startedAt,
-        ...(turn.requestedAt === undefined ? {} : { requestedAt: turn.requestedAt }),
-        userItemId: agentJournalItemKey(cursorTurnIdentity(this.sessionId, turn.turnId)),
-        ...(done?.durationMs === undefined ? {} : { durationMs: done.durationMs }),
-        ...(contextUsage ? { contextUsage } : {})
-      }),
-      AGENT_JOURNAL_THREAD_SCOPE
-    )
+    return agentJournalTurnBody({
+      turnId: turn.turnId,
+      state: done?.state ?? 'running',
+      ...(done ? { outcome: done.outcome, completedAt: done.completedAt } : {}),
+      startedAt: turn.startedAt,
+      ...(turn.requestedAt === undefined ? {} : { requestedAt: turn.requestedAt }),
+      userItemId: agentJournalSubmissionKey(turn.turnId),
+      ...(done?.durationMs === undefined ? {} : { durationMs: done.durationMs }),
+      ...(contextUsage ? { contextUsage } : {})
+    })
   }
 
   loginUrl(url: string): void {

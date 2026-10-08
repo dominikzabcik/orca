@@ -16,11 +16,7 @@ import {
 } from './cursor-model-catalog'
 import type { CursorSdkListedModel } from './cursor-sdk-protocol'
 import { supportsCursorStructuredLocation } from './cursor-structured-location-support'
-import {
-  CursorJournalTranslator,
-  cursorTurnIdentity,
-  type CursorTurn
-} from './cursor-structured-journal'
+import { CursorJournalTranslator, type CursorTurn } from './cursor-structured-journal'
 import {
   applyCursorSidecarEvent,
   beginCursorRun,
@@ -192,10 +188,7 @@ export class CursorStructuredSessionAdapter implements StructuredAgentSessionAda
     if (session.runInFlight) {
       const steered = await steerCursorRun(session, text)
       if (steered === 'complete_delivered' && session.turn) {
-        return {
-          state: 'accepted',
-          providerIdentity: cursorTurnIdentity(input.sessionId, session.turn.turnId)
-        }
+        return { state: 'accepted', providerIdentity: null }
       }
       await session.runSettled
     }
@@ -219,7 +212,7 @@ export class CursorStructuredSessionAdapter implements StructuredAgentSessionAda
       model: cursorModelSelection(session.options, this.modelList.models),
       mode: session.mode
     })
-    return { state: 'accepted', providerIdentity: cursorTurnIdentity(input.sessionId, turn.turnId) }
+    return { state: 'accepted', providerIdentity: null }
   }
 
   async cancelTurn(input: { sessionId: string }): Promise<AgentSessionCancelOutcome> {

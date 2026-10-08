@@ -106,7 +106,7 @@ describe('Cursor structured session adapter', () => {
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
       fence: 1
     })
-    expect(outcome.state).toBe('accepted')
+    expect(outcome).toEqual({ state: 'accepted', providerIdentity: null })
     expect(sink.items.map((item) => item.recordId)).toEqual([
       'turn:turn-1',
       'assistant:turn-1',
@@ -164,7 +164,7 @@ describe('Cursor structured session adapter', () => {
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'also' }] },
       fence: 1
     })
-    expect(steered).toMatchObject({ state: 'accepted' })
+    expect(steered).toEqual({ state: 'accepted', providerIdentity: null })
     await expect(adapter.closeSession(IDENTITY.sessionId)).resolves.toBe(true)
   })
 
