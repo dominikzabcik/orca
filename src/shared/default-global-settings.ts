@@ -138,6 +138,7 @@ export function buildDefaultSettings(args: {
     cursorSdkApiKey: '',
     nativeChatResumeWorkOnRestart: false,
     nativeChatQueueFollowUps: true,
+    nativeChatInlineVisuals: true,
     nativeChatInheritShellEnvironment: true,
     nativeChatShellEnvironmentVariables: [],
     nativeChatSessionOptions: {},
