@@ -19,7 +19,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'account',
-    keys: ['account add', 'account list'],
+    keys: ['account add', 'account list', 'account select', 'account rm'],
     load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS
   },
   {
@@ -216,6 +216,18 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'environment rm'
     ],
     load: async () => (await import('./handlers/environment.js')).ENVIRONMENT_HANDLERS
+  },
+  {
+    name: 'managed-server',
+    keys: [
+      'environment status',
+      'environment update',
+      'environment rollback',
+      'environment recover',
+      'environment stop',
+      'environment cancel-stop'
+    ],
+    load: async () => (await import('./handlers/managed-server.js')).MANAGED_SERVER_HANDLERS
   },
   {
     name: 'linear',
