@@ -17,8 +17,8 @@ export type CursorSdkConnection = {
   readonly pid: number
   send(command: CursorSidecarCommand): void
   onEvent(listener: (event: CursorSidecarEvent) => void): () => void
-  /** True once the process exit was observed. */
-  close(): Promise<boolean>
+  /** True once the process exit was observed. `force` kills a start that ignores stdin closing. */
+  close(options?: { force?: boolean }): Promise<boolean>
 }
 
 export function resolveCursorSdkSidecarEntry(
@@ -159,7 +159,7 @@ function connectionFromChild(child: ReturnType<typeof spawnProcess>): CursorSdkC
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    close() {
+    close(options?: { force?: boolean }) {
       exitWait ??= new Promise((resolve) => {
         if (settled || exitCode !== null || child.exitCode !== null) {
           resolve(true)
@@ -168,6 +168,14 @@ function connectionFromChild(child: ReturnType<typeof spawnProcess>): CursorSdkC
         const done = (): void => resolve(true)
         child.once('exit', done)
         child.once('error', done)
+        if (options?.force) {
+          try {
+            child.kill()
+          } catch {
+            resolve(true)
+          }
+          return
+        }
         child.stdin.end()
       })
       return exitWait

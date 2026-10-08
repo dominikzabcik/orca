@@ -132,6 +132,13 @@ describe('Cursor structured session adapter', () => {
     await expect(
       adapter.acquire({ identity: IDENTITY, fence: 1, spawnToken: 'spawn-2' })
     ).rejects.toBeInstanceOf(AgentSessionAcquisitionRefusal)
+    await expect(
+      adapter.setOption({
+        sessionId: IDENTITY.sessionId,
+        key: 'conversationMode',
+        value: 'agent'
+      })
+    ).rejects.toThrow('Cursor chat cursor_session is not running')
   })
 
   it('steers a follow-up into the running turn', async () => {
@@ -227,14 +234,16 @@ describe('Cursor structured session adapter', () => {
       sawStart = resolve
     })
     let closed = false
+    let forced = false
     const connection = scriptedConnection((command) => {
       if (command.type === 'start') {
         sawStart()
       }
     })
     const originalClose = connection.close
-    connection.close = async () => {
+    connection.close = async (options) => {
       closed = true
+      forced = options?.force === true
       return originalClose()
     }
     const adapter = new CursorStructuredSessionAdapter({
@@ -255,6 +264,7 @@ describe('Cursor structured session adapter', () => {
     controller.abort()
     await expect(pending).rejects.toThrow('Cursor chat was closed while starting')
     expect(closed).toBe(true)
+    expect(forced).toBe(true)
   })
 
   it('removes the sign-in row once the sidecar is ready', async () => {

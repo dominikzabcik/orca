@@ -134,15 +134,16 @@ export class CursorStructuredSessionAdapter implements StructuredAgentSessionAda
     })
     const started = await startedPromise.catch(async (error: unknown) => {
       this.sessions.delete(input.identity.sessionId)
-      await connection.close()
+      await connection.close({ force: true })
       throw error
     })
     if (input.signal?.aborted) {
       this.sessions.delete(input.identity.sessionId)
-      await connection.close()
+      await connection.close({ force: true })
       throw new Error('Cursor chat was closed while starting')
     }
     if (started.type !== 'ready') {
+      this.sessions.delete(input.identity.sessionId)
       await connection.close()
       const message = started.type === 'startupError' ? started.message : 'Cursor sidecar exited'
       throw cursorAuthFailure(message, started.type === 'startupError' ? started.code : undefined)
