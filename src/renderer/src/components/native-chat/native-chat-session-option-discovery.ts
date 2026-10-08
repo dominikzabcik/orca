@@ -28,6 +28,7 @@ import type {
   AgentSessionModelOption
 } from '../../../../shared/agent-session-wire'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 
 export type NativeChatModelDiscoveryContext = {
   hostKey: string
@@ -82,7 +83,7 @@ function cursorDiscoveredOptions(model: AgentSessionModelOption): CatalogOption[
   if (model.efforts.length > 1) {
     options.push({
       id: 'effort',
-      label: 'Reasoning effort',
+      label: translate('components.native-chat.composer.reasoningEffort', 'Reasoning effort'),
       category: 'thought_level',
       kind: {
         type: 'select',
@@ -95,7 +96,7 @@ function cursorDiscoveredOptions(model: AgentSessionModelOption): CatalogOption[
   if (model.supportsFastMode) {
     options.push({
       id: 'fastMode',
-      label: 'Fast mode',
+      label: translate('components.native-chat.composer.fastMode', 'Fast mode'),
       category: 'mode',
       kind: { type: 'boolean', defaultValue: false },
       apply: {}
@@ -103,13 +104,19 @@ function cursorDiscoveredOptions(model: AgentSessionModelOption): CatalogOption[
   }
   options.push({
     id: 'conversationMode',
-    label: 'Mode',
+    label: translate('components.native-chat.composer.conversationMode', 'Mode'),
     category: 'mode',
     kind: {
       type: 'select',
       choices: [
-        { value: 'agent', label: 'Agent' },
-        { value: 'plan', label: 'Plan' }
+        {
+          value: 'agent',
+          label: translate('components.native-chat.composer.conversationModeAgent', 'Agent')
+        },
+        {
+          value: 'plan',
+          label: translate('components.native-chat.composer.conversationModePlan', 'Plan')
+        }
       ],
       defaultValue: 'agent'
     },

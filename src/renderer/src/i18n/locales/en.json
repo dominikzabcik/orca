@@ -6993,7 +6993,9 @@
           "codexSessionSourceInfo": "About importing Codex history",
           "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
           "storedDefaultUndetected": "Saved as your default, but not detected right now",
-          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out."
+          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
+          "cursorSdkApiKey": "Cursor API key",
+          "cursorSdkApiKeyDescription": "Optional. Structured Cursor chat uses this key instead of a browser login. Leave it empty to sign in in the browser."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -18233,7 +18235,11 @@
         "attachmentUnreadable": "Couldn't read the dropped files.",
         "tooManyAttachments": "Attach {{value0}} or fewer files at a time.",
         "pasteFailed": "Paste failed.",
-        "commandAttachmentsUnsupported": "Remove attachments before using a chat-session command."
+        "commandAttachmentsUnsupported": "Remove attachments before using a chat-session command.",
+        "reasoningEffort": "Reasoning effort",
+        "conversationMode": "Mode",
+        "conversationModeAgent": "Agent",
+        "conversationModePlan": "Plan"
       },
       "tool": {
         "exitCode": "exit {{value0}}",
