@@ -135,6 +135,7 @@ describe('Cursor structured session adapter', () => {
     await expect(
       adapter.setOption({
         sessionId: IDENTITY.sessionId,
+        fence: 1,
         key: 'conversationMode',
         value: 'agent'
       })
