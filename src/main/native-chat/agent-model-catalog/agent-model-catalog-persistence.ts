@@ -51,6 +51,10 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
   }
   const description = text(row.description)
   const defaultEffort = text(row.defaultEffort)
+  const contextWindows = parseChoices(row.contextWindows)
+  const thinkingLevels = parseChoices(row.thinkingLevels)
+  const defaultContextWindow = text(row.defaultContextWindow)
+  const defaultThinking = text(row.defaultThinking)
   return {
     id,
     label,
@@ -58,8 +62,23 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     isDefault: row.isDefault === true,
     ...(defaultEffort ? { defaultEffort } : {}),
     efforts: efforts.filter((effort): effort is AgentSessionOptionChoice => effort !== null),
+    ...(contextWindows ? { contextWindows } : {}),
+    ...(defaultContextWindow ? { defaultContextWindow } : {}),
+    ...(thinkingLevels ? { thinkingLevels } : {}),
+    ...(defaultThinking ? { defaultThinking } : {}),
     ...(typeof row.supportsFastMode === 'boolean' ? { supportsFastMode: row.supportsFastMode } : {})
   }
+}
+
+function parseChoices(value: unknown): AgentSessionOptionChoice[] | null {
+  if (!Array.isArray(value) || value.length === 0) {
+    return null
+  }
+  const choices = value.map(parseEffort)
+  if (choices.some((choice) => choice === null)) {
+    return null
+  }
+  return choices.filter((choice): choice is AgentSessionOptionChoice => choice !== null)
 }
 
 /** Checked reconstruction rather than trust: a field a future schema drops or

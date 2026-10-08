@@ -57,7 +57,11 @@ export async function workspaceMayOverrideDefaultModel(input: {
   workspacePath: string
   accountHomePath: string
 }): Promise<boolean> {
-  // Claude's user settings or env can pick another model wherever it runs; only Codex's listed default is its configured one.
+  // Claude's user settings or env can pick another model wherever it runs.
+  // Cursor's structured launch runs the listed default unless the user picks one.
+  if (input.agent === 'cursor') {
+    return false
+  }
   if (input.agent !== 'codex') {
     return true
   }

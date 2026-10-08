@@ -6,7 +6,9 @@ const CURSOR_OPTION_KEYS: ReadonlySet<string> = new Set([
   'model',
   'effort',
   'fastMode',
-  'conversationMode'
+  'conversationMode',
+  'context',
+  'thinking'
 ])
 
 export function isCursorStructuredOptionKey(key: string): boolean {
@@ -21,7 +23,7 @@ export const CURSOR_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
     rewind: false,
     compact: false,
     threadGoal: false,
-    contextUsage: false,
+    contextUsage: true,
     imagePrompts: true,
     steering: 'inject',
     approvalEnforcement: 'provider'

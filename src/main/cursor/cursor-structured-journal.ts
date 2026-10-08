@@ -12,6 +12,7 @@ import {
   boundToolInput,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
+import type { AgentSessionContextUsage } from '../../shared/agent-session-context-usage'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CursorSidecarEvent } from './cursor-sdk-protocol'
 
@@ -34,7 +35,22 @@ export function cursorItemIdentity(sessionId: string, recordId: string): AgentJo
 
 export class CursorJournalTranslator {
   private readonly text = new Map<string, LiveText>()
+  private readonly contextByTurn = new Map<string, AgentSessionContextUsage>()
+  private readonly settled = new Map<
+    string,
+    {
+      state: 'completed' | 'interrupted'
+      outcome: 'failure' | 'cancellation' | 'success'
+      completedAt: number
+      durationMs?: number
+    }
+  >()
+  private contextWindowTokens: number | null = null
   private loginShown = false
+
+  setContextWindowTokens(tokens: number | null): void {
+    this.contextWindowTokens = tokens
+  }
 
   constructor(
     private readonly sessionId: string,
@@ -114,6 +130,25 @@ export class CursorJournalTranslator {
       this.write(cursorItemIdentity(this.sessionId, `tool:${event.callId}`), body, scope)
       return
     }
+    if (event.type === 'usage') {
+      const capturedAt = Date.now()
+      const windowTokens = this.contextWindowTokens
+      this.contextByTurn.set(turn.turnId, {
+        used: {
+          kind: 'estimate',
+          usage: {
+            inputTokens: event.inputTokens,
+            outputTokens: event.outputTokens,
+            cacheCreationInputTokens: event.cacheWriteTokens,
+            cacheReadInputTokens: event.cacheReadTokens
+          },
+          capturedAt
+        },
+        ...(windowTokens ? { window: { tokens: windowTokens, capturedAt } } : {})
+      })
+      this.writeTurn(turn)
+      return
+    }
     if (event.type === 'result') {
       if (!live.assistant && event.result) {
         this.write(
@@ -128,25 +163,33 @@ export class CursorJournalTranslator {
       }
       const failed = event.status === 'error'
       const interrupted = event.status === 'cancelled'
-      this.write(
-        cursorTurnIdentity(this.sessionId, turn.turnId),
-        agentJournalTurnBody({
-          turnId: turn.turnId,
-          state: interrupted ? 'interrupted' : 'completed',
-          ...(failed
-            ? { outcome: 'failure' as const }
-            : interrupted
-              ? { outcome: 'cancellation' as const }
-              : { outcome: 'success' as const }),
-          startedAt: turn.startedAt,
-          ...(turn.requestedAt === undefined ? {} : { requestedAt: turn.requestedAt }),
-          completedAt: Date.now(),
-          userItemId: agentJournalItemKey(cursorTurnIdentity(this.sessionId, turn.turnId)),
-          ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs })
-        }),
-        AGENT_JOURNAL_THREAD_SCOPE
-      )
+      this.settled.set(turn.turnId, {
+        state: interrupted ? 'interrupted' : 'completed',
+        outcome: failed ? 'failure' : interrupted ? 'cancellation' : 'success',
+        completedAt: Date.now(),
+        ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs })
+      })
+      this.writeTurn(turn)
     }
+  }
+
+  private writeTurn(turn: CursorTurn): void {
+    const done = this.settled.get(turn.turnId)
+    const contextUsage = this.contextByTurn.get(turn.turnId)
+    this.write(
+      cursorTurnIdentity(this.sessionId, turn.turnId),
+      agentJournalTurnBody({
+        turnId: turn.turnId,
+        state: done?.state ?? 'running',
+        ...(done ? { outcome: done.outcome, completedAt: done.completedAt } : {}),
+        startedAt: turn.startedAt,
+        ...(turn.requestedAt === undefined ? {} : { requestedAt: turn.requestedAt }),
+        userItemId: agentJournalItemKey(cursorTurnIdentity(this.sessionId, turn.turnId)),
+        ...(done?.durationMs === undefined ? {} : { durationMs: done.durationMs }),
+        ...(contextUsage ? { contextUsage } : {})
+      }),
+      AGENT_JOURNAL_THREAD_SCOPE
+    )
   }
 
   loginUrl(url: string): void {

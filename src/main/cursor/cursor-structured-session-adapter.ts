@@ -5,12 +5,12 @@ import type {
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity
 } from '../../shared/agent-session-record'
-import type { AgentSessionOptionsResult } from '../../shared/agent-session-wire'
+import { readCursorSessionOptions } from './cursor-structured-session-options'
 import type { CursorSdkConnection } from './cursor-sdk-connection'
 import { openCursorSdkConnection } from './cursor-sdk-connection'
 import {
   cursorModelSelection,
-  cursorModelsToSessionOptions,
+  cursorSelectedContextWindowTokens,
   emptyCursorModelListCache,
   refreshCursorModelList
 } from './cursor-model-catalog'
@@ -81,7 +81,7 @@ export class CursorStructuredSessionAdapter implements StructuredAgentSessionAda
     const apiKey = this.deps.resolveApiKey?.()?.trim() || undefined
     const gate = this.deps.resolveToolGate?.() ?? { sandbox: false, autoReview: false }
     await mkdir(join(this.deps.stateDirectory, 'cursor-sdk-agents'), { recursive: true })
-    const connection = (this.deps.openConnection ?? openCursorSdkConnection)({ apiKey })
+    const connection = await (this.deps.openConnection ?? openCursorSdkConnection)({ apiKey })
     if (!connection.pid) {
       await connection.close()
       throw new AgentSessionPreSpawnError(new Error('Cursor sidecar did not start'))
@@ -207,6 +207,10 @@ export class CursorStructuredSessionAdapter implements StructuredAgentSessionAda
     }
     session.turn = turn
     session.translator.openTurn(turn)
+    await refreshCursorModelList(this.modelList, this.deps)
+    session.translator.setContextWindowTokens(
+      cursorSelectedContextWindowTokens(session.options, this.modelList.models)
+    )
     beginCursorRun(session)
     session.connection.send({
       type: 'send',
@@ -237,28 +241,18 @@ export class CursorStructuredSessionAdapter implements StructuredAgentSessionAda
       session.mode = input.value === 'plan' ? 'plan' : 'agent'
     }
     session.options = { ...session.options, [input.key]: input.value }
+    session.translator.setContextWindowTokens(
+      cursorSelectedContextWindowTokens(session.options, this.modelList.models)
+    )
     return session.options
   }
 
-  async readOptions(input: { sessionId: string }): Promise<AgentSessionOptionsResult> {
-    const session = this.sessions.get(input.sessionId)
-    const options = session?.options ?? {}
-    await refreshCursorModelList(this.modelList, this.deps)
-    const models = cursorModelsToSessionOptions(this.modelList.models)
-    const model = options.model || models.find((entry) => entry.isDefault)?.id || 'auto'
-    return {
-      models,
-      current: {
-        model,
-        ...(options.effort ? { effort: options.effort } : {}),
-        ...(options.fastMode === 'true' || options.fastMode === 'false'
-          ? { fastMode: options.fastMode === 'true' }
-          : {}),
-        ...(session?.mode ? { conversationMode: session.mode } : {}),
-        confirmed: ['model', ...(options.effort ? ['effort'] : []), 'conversationMode']
-      }
-    }
-  }
+  readOptions = (input: { sessionId: string }) =>
+    readCursorSessionOptions({
+      session: this.sessions.get(input.sessionId),
+      modelList: this.modelList,
+      refresh: () => refreshCursorModelList(this.modelList, this.deps)
+    })
 
   awaitStarted = (): Promise<void> => Promise.resolve()
 

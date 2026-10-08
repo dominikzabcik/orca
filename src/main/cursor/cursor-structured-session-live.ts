@@ -188,6 +188,7 @@ export function applyCursorSidecarEvent(
       event.type === 'thinking' ||
       event.type === 'task' ||
       event.type === 'tool' ||
+      event.type === 'usage' ||
       event.type === 'result')
   ) {
     session.translator.apply(session.turn, event)

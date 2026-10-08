@@ -387,6 +387,12 @@ export type AgentSessionModelOption = {
   isDefault: boolean
   defaultEffort?: string
   efforts: AgentSessionOptionChoice[]
+  /** Context-window sizes the model offers, when the listing names more than one. */
+  contextWindows?: AgentSessionOptionChoice[]
+  defaultContextWindow?: string
+  /** Thinking on/off (or levels), when the listing offers them separately from effort. */
+  thinkingLevels?: AgentSessionOptionChoice[]
+  defaultThinking?: string
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean
 }
@@ -477,6 +483,10 @@ export type AgentSessionOptionsResult = {
     effort?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */
     fastMode?: boolean
+    /** Cursor model parameter. Absent on Claude and Codex. */
+    context?: string
+    /** Cursor model parameter. Absent on Claude and Codex. */
+    thinking?: string
     /** Provider-reported effective routing, distinct from the next-turn preference. */
     fastModeState?: AgentSessionFastModeState
     /**

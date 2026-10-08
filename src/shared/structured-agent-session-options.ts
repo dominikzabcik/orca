@@ -1,8 +1,4 @@
-import type {
-  AgentSessionOptionCatalog,
-  CatalogModel,
-  CatalogOption
-} from './agent-session-option-catalog'
+import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog'
 import {
   buildNativeChatSessionOptionSnapshot,
   resolveEffectiveNativeChatModelId,
@@ -26,61 +22,22 @@ import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue
 } from './structured-agent-session-option-codec'
-
-function effortOption(model: AgentSessionOptionsResult['models'][number]): CatalogOption | null {
-  if (model.efforts.length <= 1) {
-    return null
-  }
-  return {
-    id: 'effort',
-    label: 'Reasoning effort',
-    category: 'thought_level',
-    kind: {
-      type: 'select',
-      choices: model.efforts,
-      defaultValue: model.defaultEffort ?? model.efforts[0]!.value,
-      ...(model.defaultEffort ? { defaultIsCliDefault: true as const } : {})
-    },
-    apply: { midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` } }
-  }
-}
-
-function fastModeOption(): CatalogOption {
-  return {
-    id: 'fastMode',
-    label: 'Fast mode',
-    category: 'mode',
-    kind: { type: 'boolean', defaultValue: false },
-    apply: {}
-  }
-}
-
-function discoveredModel(
-  model: AgentSessionOptionsResult['models'][number],
-  sessionSupportsFastMode: boolean
-): CatalogModel {
-  const effort = effortOption(model)
-  return {
-    id: model.id,
-    label: model.label,
-    ...(model.description ? { description: model.description } : {}),
-    ...(model.isDefault ? { isDefault: true } : {}),
-    options: [
-      ...(effort ? [effort] : []),
-      ...(sessionSupportsFastMode && model.supportsFastMode === true ? [fastModeOption()] : [])
-    ]
-  }
-}
+import {
+  discoveredStructuredAgentModel,
+  withStructuredConversationMode
+} from './structured-agent-session-discovered-model'
 
 export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
   result: AgentSessionOptionsResult
 ): AgentSessionOptionCatalog {
   const mode = seed.structuredConversationMode
-  const models: CatalogModel[] = result.models.map((model) => {
-    const discovered = discoveredModel(model, result.fastModeSupport?.supported === true)
-    return mode ? { ...discovered, options: [...discovered.options, mode] } : discovered
-  })
+  const models: CatalogModel[] = result.models.map((model) =>
+    withStructuredConversationMode(
+      discoveredStructuredAgentModel(model, result.fastModeSupport?.supported === true),
+      mode
+    )
+  )
   if (!models.some((model) => model.id === result.current.model)) {
     models.push({
       id: result.current.model,
@@ -153,8 +110,12 @@ export function applyStructuredAgentSessionModelCatalog(
   if (state.catalogSource === 'live' || catalog.origin === 'unknown') {
     return state
   }
+  const mode = seed.structuredConversationMode
   const models = catalog.models.map((model) =>
-    discoveredModel(model, catalog.fastModeSupport?.supported === true)
+    withStructuredConversationMode(
+      discoveredStructuredAgentModel(model, catalog.fastModeSupport?.supported === true),
+      mode
+    )
   )
   if (models.length === 0) {
     return state
@@ -186,6 +147,8 @@ export function applyStructuredAgentSessionOptions(
       model: result.current.model,
       ...(result.current.effort ? { effort: result.current.effort } : {}),
       ...(result.current.fastMode !== undefined ? { fastMode: result.current.fastMode } : {}),
+      ...(result.current.context ? { context: result.current.context } : {}),
+      ...(result.current.thinking ? { thinking: result.current.thinking } : {}),
       ...(result.current.conversationMode
         ? { conversationMode: result.current.conversationMode }
         : {})

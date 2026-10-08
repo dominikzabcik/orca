@@ -8,8 +8,12 @@ export function createCursorModelCatalogProbe(input: {
   return async () => {
     const apiKey = input.resolveApiKey?.()?.trim() || undefined
     const listed = await listCursorSdkModels({ apiKey })
+    const models = cursorModelsToSessionOptions(listed)
     return {
-      models: cursorModelsToSessionOptions(listed),
+      models,
+      ...(models.some((model) => model.supportsFastMode)
+        ? { fastModeSupport: { supported: true } }
+        : {}),
       fastModeTierByModel: new Map(),
       origin: 'probe'
     }

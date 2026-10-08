@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { ensureCursorSdkLoginFromSessionOnce } from './cursor-sdk-session-login'
 import { cursorSdkHomePath } from './cursor-structured-location-support'
 import { spawnProcess } from '../../shared/child-process/run-process'
 import {
@@ -59,10 +60,13 @@ function cursorSidecarEnv(apiKey: string | undefined): NodeJS.ProcessEnv {
   return env
 }
 
-export function openCursorSdkConnection(input: {
+export async function openCursorSdkConnection(input: {
   apiKey?: string
   entryPath?: string
-}): CursorSdkConnection {
+}): Promise<CursorSdkConnection> {
+  if (!input.apiKey) {
+    await ensureCursorSdkLoginFromSessionOnce()
+  }
   const entryPath = input.entryPath ?? resolveCursorSdkSidecarEntry(__dirname)
   const child = spawnProcess({
     program: process.execPath,
@@ -77,6 +81,9 @@ export async function listCursorSdkModels(input: {
   apiKey?: string
   entryPath?: string
 }): Promise<CursorSdkListedModel[]> {
+  if (!input.apiKey) {
+    await ensureCursorSdkLoginFromSessionOnce()
+  }
   const entryPath = input.entryPath ?? resolveCursorSdkSidecarEntry(__dirname)
   const { runProcess } = await import('../../shared/child-process/run-process')
   const result = await runProcess({

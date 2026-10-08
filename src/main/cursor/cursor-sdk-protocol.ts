@@ -74,6 +74,10 @@ export type CursorSdkListedModel = {
     displayName?: string
     values: { value: string; displayName?: string }[]
   }[]
+  variants?: {
+    isDefault?: boolean
+    params: { id: string; value: string }[]
+  }[]
 }
 
 export function parseCursorSidecarEvent(line: string): CursorSidecarEvent | null {

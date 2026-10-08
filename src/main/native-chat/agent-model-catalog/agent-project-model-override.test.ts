@@ -64,4 +64,14 @@ describe('workspaceMayOverrideDefaultModel', () => {
   it('never vouches for a Claude default, whose user settings can pick the model', async () => {
     expect(await mayOverride('claude', join(root, 'anywhere'))).toBe(true)
   })
+
+  it('vouches for a Cursor default, which is the model a new chat runs', async () => {
+    expect(
+      await workspaceMayOverrideDefaultModel({
+        agent: 'cursor',
+        workspacePath: join(root, 'anywhere'),
+        accountHomePath: '/homes/a'
+      })
+    ).toBe(false)
+  })
 })
