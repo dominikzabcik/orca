@@ -21,6 +21,7 @@ import {
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import { readClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentSessionAttachmentStoreRoot } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
 import {
@@ -37,15 +38,11 @@ import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtim
 import {
   resolveStructuredClaudeAccountHomePath,
   resolveStructuredCodexAccountHomePath,
-  resolveStructuredCursorAccountHomePath,
   type StructuredClaudeAccountHomeDeps,
   type StructuredCodexAccountHomeDeps
 } from './structured-agent-account-home'
 import { ACP_LAUNCH_SPECS, type AcpLaunchSpec } from '../acp/acp-launch-specs'
-import { listCursorSdkModels } from '../cursor/cursor-sdk-connection'
-import { CursorStructuredSessionAdapter } from '../cursor/cursor-structured-session-adapter'
-import { CURSOR_STRUCTURED_AGENT } from '../cursor/cursor-structured-agent-definition'
-import { supportsCursorStructuredLocation } from '../cursor/cursor-structured-location-support'
+import { CURSOR_RUNTIME_REGISTRATION } from '../cursor/cursor-runtime-registration'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import { createAcpAgentConnection } from '../acp/acp-agent-connection'
 import {
@@ -131,6 +128,7 @@ function nativeChatVisualsFor(deps: StructuredAgentSessionRuntimeDeps): {
 function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps, store, followUps, host } = context
   return new CodexStructuredSessionAdapter({
+    resolveAccountKind: deps.resolveCodexAccountKind,
     resolveLaunch: createCodexStructuredLaunchResolver({
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
@@ -175,6 +173,12 @@ function createClaudeAdapter(
     resolveClaudeAuthPolicy: deps.resolveClaudeAuthPolicy,
     ...(deps.resolveClaudePermissionMode
       ? { resolveClaudePermissionMode: deps.resolveClaudePermissionMode }
+      : {}),
+    ...(deps.getClaudeManagedAccountGateSettings
+      ? {
+          readClaudeManagedAccountGate: () =>
+            readClaudeManagedAccountGateSettings(deps.getClaudeManagedAccountGateSettings!)
+        }
       : {}),
     attachmentDirectory: agentSessionAttachmentStoreRoot(deps.stateDirectory),
     onLifecycleEvent: context.deliverLifecycle,
@@ -228,7 +232,11 @@ function acpRegistration(spec: AcpLaunchSpec): StructuredAgentRuntimeRegistratio
           ...(deps.resolveAgentCommandSettings
             ? { resolveCommandSettings: deps.resolveAgentCommandSettings }
             : {}),
-          ...(deps.resolveAgentFullAccess ? { resolveFullAccess: deps.resolveAgentFullAccess } : {})
+          ...(deps.resolveAgentFullAccess
+            ? { resolveFullAccess: deps.resolveAgentFullAccess }
+            : {}),
+          ...nativeChatVisualsFor(deps),
+          logger: deps.logger
         }),
         connect: (launch, options) => createAcpAgentConnection(launch, options),
         ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
@@ -291,32 +299,7 @@ export const STRUCTURED_AGENT_RUNTIME_REGISTRATIONS: readonly StructuredAgentRun
           })
         )
     },
-    {
-      definition: CURSOR_STRUCTURED_AGENT,
-      supportsLocation: supportsCursorStructuredLocation,
-      resolveAccountHome: async () =>
-        agentSessionAccountHome(CURSOR_STRUCTURED_AGENT, resolveStructuredCursorAccountHomePath()),
-      createAdapter: (context) => {
-        const { deps } = context
-        return new CursorStructuredSessionAdapter({
-          hostId: deps.hostId,
-          stateDirectory: deps.stateDirectory,
-          resolveWorkspacePath: deps.resolveWorkspacePath,
-          ...(deps.resolveCursorApiKey ? { resolveApiKey: deps.resolveCursorApiKey } : {}),
-          listModels: (apiKey) => listCursorSdkModels({ apiKey }),
-          resolveToolGate: () => {
-            const bypass = deps.resolveAgentFullAccess?.('cursor') ?? false
-            return { sandbox: !bypass, autoReview: !bypass }
-          },
-          ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
-          onEvent: (event) => {
-            if (event.type === 'ended') {
-              context.deliverLifecycle(event)
-            }
-          }
-        })
-      }
-    },
+    CURSOR_RUNTIME_REGISTRATION,
     ...ACP_LAUNCH_SPECS.map(acpRegistration)
   ]
 
