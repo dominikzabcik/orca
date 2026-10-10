@@ -31,6 +31,7 @@ export const CURSOR_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   restingOptions: {
     acceptsKey: isCursorStructuredOptionKey,
     fallbackModels: () => [{ id: 'auto', label: 'Auto', isDefault: true, efforts: [] }],
-    effortDefaultsToModel: true
+    effortDefaultsToModel: true,
+    awaitsFirstListing: true
   }
 }
