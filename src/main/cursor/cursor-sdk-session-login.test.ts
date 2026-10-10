@@ -68,7 +68,9 @@ describe('ensureCursorSdkLoginFromSession', () => {
   it('mints an SDK key from the Cursor session already on this machine', async () => {
     const path = await authPath()
     const fetchImpl = vi.fn<typeof fetch>(async () => {
-      return new Response(JSON.stringify({ apiKey: MINTED_KEY }), { status: 200 })
+      return new Response(JSON.stringify({ apiKey: MINTED_KEY }), {
+        status: 200
+      })
     })
 
     await expect(
@@ -91,11 +93,7 @@ describe('ensureCursorSdkLoginFromSession', () => {
       name: 'Orca',
       expiresAt: String(1_000 + 7_776_000_000)
     })
-    const stored = JSON.parse(await readFile(path, 'utf8')) as {
-      apiKey: string
-      email: string
-      version: number
-    }
+    const stored: unknown = JSON.parse(await readFile(path, 'utf8'))
     expect(stored).toMatchObject({
       version: 1,
       backendUrl: 'https://api2.cursor.sh',

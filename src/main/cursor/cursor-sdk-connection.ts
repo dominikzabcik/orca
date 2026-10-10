@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { z } from 'zod'
 import { ensureCursorSdkLoginFromSessionOnce } from './cursor-sdk-session-login'
 import { cursorSdkHomePath } from './cursor-structured-location-support'
 import { spawnProcess } from '../../shared/child-process/run-process'
@@ -12,6 +13,29 @@ import {
 } from './cursor-sdk-protocol'
 
 const ENTRY_FILENAME = 'cursor-sdk-sidecar.js'
+
+const listedModelSchema: z.ZodType<CursorSdkListedModel> = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  description: z.string().optional(),
+  parameters: z
+    .array(
+      z.object({
+        id: z.string(),
+        displayName: z.string().optional(),
+        values: z.array(z.object({ value: z.string(), displayName: z.string().optional() }))
+      })
+    )
+    .optional(),
+  variants: z
+    .array(
+      z.object({
+        isDefault: z.boolean().optional(),
+        params: z.array(z.object({ id: z.string(), value: z.string() }))
+      })
+    )
+    .optional()
+})
 
 export type CursorSdkConnection = {
   readonly pid: number
@@ -108,8 +132,14 @@ export async function listCursorSdkModels(input: {
   if (typeof parsed !== 'object' || parsed === null || !('models' in parsed)) {
     throw new Error('Cursor model list was not a catalog')
   }
-  const models = (parsed as { models: unknown }).models
-  return Array.isArray(models) ? (models as CursorSdkListedModel[]) : []
+  const models = parsed.models
+  if (!Array.isArray(models)) {
+    return []
+  }
+  return models.flatMap((model: unknown) => {
+    const result = listedModelSchema.safeParse(model)
+    return result.success ? [result.data] : []
+  })
 }
 
 function connectionFromChild(child: ReturnType<typeof spawnProcess>): CursorSdkConnection {
