@@ -193,6 +193,8 @@ export class CursorStructuredSessionAdapter implements StructuredAgentSessionAda
       }
       await session.runSettled
     }
+    // Read before the turn opens: a failed read must not leave a run that never settles.
+    const images = await cursorMessageImages(input.body)
     const turn: CursorTurn = {
       sessionId: input.sessionId,
       turnId: input.clientMessageId,
@@ -209,7 +211,7 @@ export class CursorStructuredSessionAdapter implements StructuredAgentSessionAda
     session.connection.send({
       type: 'send',
       text,
-      ...(await cursorMessageImages(input.body)),
+      ...images,
       model: cursorModelSelection(session.options, this.modelList.models),
       mode: session.mode
     })

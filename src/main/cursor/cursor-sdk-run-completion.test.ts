@@ -30,6 +30,23 @@ describe('waitForStoredCursorRun', () => {
     expect(result?.result).toBe('ok')
   })
 
+  it('ignores a run from before the send that started within the clock skew', async () => {
+    let calls = 0
+    const result = await waitForStoredCursorRun(
+      async () => {
+        calls += 1
+        const previous = { runId: 'run-1', status: 'finished', result: 'old', startedAt: 9_000 }
+        return calls === 1
+          ? [previous]
+          : [previous, { runId: 'run-2', status: 'finished', result: 'ok', startedAt: 10_000 }]
+      },
+      10_000,
+      () => false,
+      new Set(['run-1'])
+    )
+    expect(result?.result).toBe('ok')
+  })
+
   it('stops when the send path takes over', async () => {
     let stop = false
     const pending = waitForStoredCursorRun(

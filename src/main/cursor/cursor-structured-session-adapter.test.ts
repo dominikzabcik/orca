@@ -142,6 +142,49 @@ describe('Cursor structured session adapter', () => {
     ).rejects.toThrow('Cursor chat cursor_session is not running')
   })
 
+  it('refuses a message whose image cannot be read without leaving a run open', async () => {
+    const sent: CursorSidecarCommand['type'][] = []
+    const connection = scriptedConnection((command, emit) => {
+      sent.push(command.type)
+      if (command.type === 'start') {
+        emit({ type: 'ready', agentId: 'agent_1' })
+      }
+      if (command.type === 'send') {
+        emit({ type: 'result', status: 'finished', durationMs: 5 })
+      }
+    })
+    const adapter = new CursorStructuredSessionAdapter({
+      hostId: 'local',
+      stateDirectory: '/tmp/orca-cursor-test',
+      resolveWorkspacePath: async () => '/tmp/workspace',
+      openConnection: () => connection,
+      readProcessStartTime: async () => 1000
+    })
+    await adapter.acquire({ identity: IDENTITY, fence: 1, spawnToken: 'spawn-image' })
+    await expect(
+      adapter.dispatch({
+        sessionId: IDENTITY.sessionId,
+        clientMessageId: 'turn-1',
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'image-ref', path: '/tmp/orca-cursor-test-missing-image.png' }]
+        },
+        fence: 1
+      })
+    ).rejects.toThrow()
+    await expect(
+      adapter.dispatch({
+        sessionId: IDENTITY.sessionId,
+        clientMessageId: 'turn-2',
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
+        fence: 1
+      })
+    ).resolves.toEqual({ state: 'accepted', providerIdentity: null })
+    expect(sent).toEqual(['start', 'send'])
+    await expect(adapter.closeSession(IDENTITY.sessionId)).resolves.toBe(true)
+  })
+
   it('steers a follow-up into the running turn', async () => {
     const connection = scriptedConnection((command, emit) => {
       if (command.type === 'start') {

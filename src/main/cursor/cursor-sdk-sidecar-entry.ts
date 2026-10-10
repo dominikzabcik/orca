@@ -143,6 +143,11 @@ async function onSend(command: Extract<CursorSidecarCommand, { type: 'send' }>):
       : command.text
   forward = INITIAL_CURSOR_RUN_FORWARD_STATE
   const current = agent
+  const priorRunIds = new Set(
+    (await listStoredRuns(current.agentId).catch(() => []))
+      .map((row) => row.runId)
+      .filter((runId): runId is string => typeof runId === 'string')
+  )
   const sentAt = Date.now()
   let stopWatch = false
   const sending = current.send(message, {
@@ -158,7 +163,8 @@ async function onSend(command: Extract<CursorSidecarCommand, { type: 'send' }>):
       waitForStoredCursorRun(
         () => listStoredRuns(current.agentId),
         sentAt,
-        () => stopWatch
+        () => stopWatch,
+        priorRunIds
       ).then((row) => ({ kind: 'store' as const, row }))
     ])
     if (outcome.kind === 'run') {

@@ -12,6 +12,7 @@ export type CursorSdkRunResult = {
 }
 
 export type CursorSdkStoredRun = {
+  runId?: string
   status: string
   result?: string | null
   error?: string | null
@@ -139,11 +140,13 @@ function delay(ms: number): Promise<void> {
 
 const STORE_MATCH_SKEW_MS = 2_000
 
-/** The stored row can finish before `Agent.send` returns. */
+/** The stored row can finish before `Agent.send` returns. `priorRunIds` are the rows from before
+ *  the send: a short previous turn can still start within the clock skew. */
 export async function waitForStoredCursorRun(
   readRuns: () => Promise<readonly CursorSdkStoredRun[]>,
   sentAt: number,
-  stopped: () => boolean
+  stopped: () => boolean,
+  priorRunIds: ReadonlySet<string> = new Set()
 ): Promise<CursorSdkStoredRun | null> {
   while (!stopped()) {
     const rows = await readRuns().catch(() => [])
@@ -153,6 +156,7 @@ export async function waitForStoredCursorRun(
     const match = rows.find((row) => {
       const began = row.startedAt ?? row.createdAt
       return (
+        !(row.runId && priorRunIds.has(row.runId)) &&
         typeof began === 'number' &&
         began >= sentAt - STORE_MATCH_SKEW_MS &&
         isTerminalRunStatus(row.status)

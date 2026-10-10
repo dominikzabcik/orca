@@ -5,6 +5,7 @@ import { cursorSdkHomePath } from './cursor-structured-location-support'
 
 const LOGIN_TTL_MS = 7_776_000_000
 const KEY_NAME = 'Orca'
+const MINT_TIMEOUT_MS = 15_000
 
 type SessionLoginDeps = {
   readSession?: () => Promise<CursorAuthReadResult>
@@ -63,7 +64,8 @@ async function mintSdkKey(
       'Content-Type': 'application/json',
       'Connect-Protocol-Version': '1'
     },
-    body: JSON.stringify({ name: KEY_NAME, expiresAt: String(expiresAtMs) })
+    body: JSON.stringify({ name: KEY_NAME, expiresAt: String(expiresAtMs) }),
+    signal: AbortSignal.timeout(MINT_TIMEOUT_MS)
   })
   if (!response.ok) {
     return null
@@ -108,6 +110,16 @@ export async function ensureCursorSdkLoginFromSession(
   if (await hasStoredSdkLogin(authPath, nowMs, backendUrl)) {
     return true
   }
+  // Any failure here leaves the SDK's own browser login to run.
+  return mintAndStoreSdkLogin(deps, backendUrl, authPath, nowMs).catch(() => false)
+}
+
+async function mintAndStoreSdkLogin(
+  deps: SessionLoginDeps,
+  backendUrl: string,
+  authPath: string,
+  nowMs: number
+): Promise<boolean> {
   const session = await (deps.readSession ?? readCursorAuthSession)()
   if (session.status !== 'ok') {
     return false

@@ -119,4 +119,22 @@ describe('ensureCursorSdkLoginFromSession', () => {
     ).resolves.toBe(false)
     expect(fetchImpl).not.toHaveBeenCalled()
   })
+
+  it.each([
+    [
+      'the request fails',
+      async () => {
+        throw new Error('offline')
+      }
+    ],
+    ['the reply is not JSON', async () => new Response('<html>', { status: 200 })]
+  ])('leaves the browser login in place when %s', async (_name, reply) => {
+    await expect(
+      ensureCursorSdkLoginFromSession({
+        authPath: await authPath(),
+        readSession: async () => signedIn(),
+        fetchImpl: vi.fn<typeof fetch>(reply)
+      })
+    ).resolves.toBe(false)
+  })
 })
