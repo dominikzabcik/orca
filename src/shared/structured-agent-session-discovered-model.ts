@@ -1,22 +1,23 @@
 import type { CatalogModel, CatalogOption } from './agent-session-option-catalog'
-import type { AgentSessionOptionsResult } from './agent-session-wire'
+import type { AgentSessionOptionChoice, AgentSessionOptionsResult } from './agent-session-wire'
+
+// The picker options one listed model offers, built from what its host reported.
 
 function listedSelect(
   id: string,
   label: string,
   category: CatalogOption['category'],
-  choices: { value: string; label: string }[] | undefined,
+  choices: AgentSessionOptionChoice[] | undefined,
   defaultValue: string | undefined,
   apply: CatalogOption['apply']
 ): CatalogOption | null {
   if (!choices || choices.length <= 1) {
     return null
   }
-  const fallback = choices[0]!.value
   const selected =
     defaultValue && choices.some((choice) => choice.value === defaultValue)
       ? defaultValue
-      : fallback
+      : choices[0]!.value
   return {
     id,
     label,
@@ -52,7 +53,22 @@ function fastModeOption(): CatalogOption {
   }
 }
 
-export function discoveredStructuredAgentModel(
+/** Standard plus the tiers the model lists, valued by tier id; one choice in place of Fast. */
+function serviceTierOption(tiers: readonly AgentSessionOptionChoice[]): CatalogOption {
+  return {
+    id: 'serviceTier',
+    label: 'Speed',
+    category: 'mode',
+    kind: {
+      type: 'select',
+      choices: [{ value: 'default', label: 'Standard' }, ...tiers],
+      defaultValue: 'default'
+    },
+    apply: {}
+  }
+}
+
+export function discoveredModel(
   model: AgentSessionOptionsResult['models'][number],
   sessionSupportsFastMode: boolean
 ): CatalogModel {
@@ -73,6 +89,7 @@ export function discoveredStructuredAgentModel(
     model.defaultThinking,
     {}
   )
+  const serviceTier = model.serviceTiers?.length ? serviceTierOption(model.serviceTiers) : null
   return {
     id: model.id,
     label: model.label,
@@ -82,7 +99,11 @@ export function discoveredStructuredAgentModel(
       ...(effort ? [effort] : []),
       ...(context ? [context] : []),
       ...(thinking ? [thinking] : []),
-      ...(sessionSupportsFastMode && model.supportsFastMode === true ? [fastModeOption()] : [])
+      ...(serviceTier
+        ? [serviceTier]
+        : sessionSupportsFastMode && model.supportsFastMode === true
+          ? [fastModeOption()]
+          : [])
     ]
   }
 }

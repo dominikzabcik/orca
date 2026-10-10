@@ -1,5 +1,10 @@
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type {
+  AgentSessionCurrentModelParameters,
+  AgentSessionModelParameterOptions,
+  AgentSessionOptionChoice
+} from './agent-session-model-parameters'
+import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
 } from './agent-session-background-task-wire'
@@ -326,6 +331,8 @@ export type AgentSessionMutationResult<TValue> =
 // ─── Per-method payloads ────────────────────────────────────────────────────
 
 export type AgentSessionAttachResult = {
+  /** Create's committed opening message, even when its row is outside the returned history page. */
+  firstMessage?: AgentJournalSubmission
   sessionId: string
   fence: number
   page: AgentSessionHistoryPage
@@ -380,27 +387,21 @@ export type AgentSessionOptionResult = {
   options?: Record<string, string>
 }
 
-export type AgentSessionOptionChoice = {
-  value: string
-  label: string
-  description?: string
-}
+export type { AgentSessionOptionChoice }
 
-export type AgentSessionModelOption = {
+export type AgentSessionModelOption = AgentSessionModelParameterOptions & {
   id: string
   label: string
   description?: string
   isDefault: boolean
   defaultEffort?: string
   efforts: AgentSessionOptionChoice[]
-  /** Context-window sizes the model offers, when the listing names more than one. */
-  contextWindows?: AgentSessionOptionChoice[]
-  defaultContextWindow?: string
-  /** Thinking on/off (or levels), when the listing offers them separately from effort. */
-  thinkingLevels?: AgentSessionOptionChoice[]
-  defaultThinking?: string
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean
+  /** Service tiers the provider lists for this model besides its standard one, each valued by the
+   *  provider's own tier id. Absent means unknown; a client that reads it offers one speed choice
+   *  (`default` for standard) in place of the Fast toggle. */
+  serviceTiers?: AgentSessionOptionChoice[]
 }
 
 export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'
@@ -433,6 +434,12 @@ export type AgentSessionModelCatalogResult = {
       models: AgentSessionModelOption[]
       fastModeSupport?: AgentSessionFastModeSupport
       fetchedAt: number
+      /** The listed default is the model a new chat here launches with: the agent's listing names
+       *  its configured model and no workspace config can replace it. Absent from an older host. */
+      listingNamesConfiguredModel?: boolean
+      /** The named default holds in every workspace: the agent reads no project config for its
+       *  model, so an answer naming no workspace serves any new chat. Absent from an older host. */
+      defaultHoldsInEveryWorkspace?: true
     }
 )
 
@@ -488,15 +495,13 @@ export type AgentSessionOptionsResult = {
   models: AgentSessionModelOption[]
   /** Session/account/transport support. Absent means unknown, never unsupported. */
   fastModeSupport?: AgentSessionFastModeSupport
-  current: {
-    model: string
+  current: AgentSessionCurrentModelParameters & {
+    model?: string
     effort?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */
     fastMode?: boolean
-    /** Cursor model parameter. Absent on Claude and Codex. */
-    context?: string
-    /** Cursor model parameter. Absent on Claude and Codex. */
-    thinking?: string
+    /** Next-turn service tier id where the model lists `serviceTiers`; `default` is standard. */
+    serviceTier?: string
     /** Provider-reported effective routing, distinct from the next-turn preference. */
     fastModeState?: AgentSessionFastModeState
     /**
@@ -505,7 +510,5 @@ export type AgentSessionOptionsResult = {
      * treating the value as unconfirmed, which is what it was before.
      */
     confirmed?: readonly string[]
-    /** Cursor structured chat: agent or plan. Absent on Claude and Codex. */
-    conversationMode?: 'agent' | 'plan'
   }
 }

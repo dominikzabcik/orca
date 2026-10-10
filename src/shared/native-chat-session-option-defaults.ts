@@ -39,6 +39,7 @@ export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = [
   'model',
   'effort',
   'fastMode',
+  'serviceTier',
   'conversationMode',
   'context',
   'thinking'
@@ -57,7 +58,7 @@ export function narrowStructuredLaunchSeedOptions(
   const seeded: Record<string, string> = {}
   for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
     const value = values?.[id]
-    if ((id === 'model' || id === 'effort') && !(typeof value === 'string' && value.trim())) {
+    if (id !== 'fastMode' && !(typeof value === 'string' && value.trim())) {
       continue
     }
     if (typeof value === 'string' || typeof value === 'boolean') {

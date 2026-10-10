@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { ensureCursorSdkLoginFromSessionOnce } from './cursor-sdk-session-login'
 import { cursorSdkHomePath } from './cursor-structured-location-support'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import {
   parseCursorSidecarEvent,
   type CursorSdkListedModel,
@@ -109,7 +110,6 @@ export async function listCursorSdkModels(input: {
     await ensureCursorSdkLoginFromSessionOnce()
   }
   const entryPath = input.entryPath ?? resolveCursorSdkSidecarEntry(__dirname)
-  const { runProcess } = await import('../../shared/child-process/run-process')
   const result = await runProcess({
     program: process.execPath,
     args: [entryPath, 'models'],
@@ -142,7 +142,7 @@ export async function listCursorSdkModels(input: {
   })
 }
 
-function connectionFromChild(child: ReturnType<typeof spawnProcess>): CursorSdkConnection {
+function connectionFromChild(child: PipedChildProcess): CursorSdkConnection {
   const listeners = new Set<(event: CursorSidecarEvent) => void>()
   let buffer = ''
   let exitCode: number | null = null
